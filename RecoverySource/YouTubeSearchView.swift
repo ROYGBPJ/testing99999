@@ -1,34 +1,38 @@
 import SwiftUI
 
 /// Search-screen scaffold for a future Nova Video Xcode target.
-/// Pass a configured YouTubeSearchService into this view. This file is not
-/// included in the currently packaged precompiled IPA.
+/// This file is not part of the currently packaged precompiled IPA.
 struct YouTubeSearchView: View {
     let service: YouTubeSearchService
 
     @State private var query = ""
     @State private var results: [YouTubeSearchResult] = []
     @State private var isSearching = false
+    @State private var hasSearched = false
     @State private var errorMessage: String?
+    @FocusState private var searchFieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 TextField("Search video name", text: $query)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .keyboardType(.webSearch)
                     .submitLabel(.search)
-                    .onSubmit { Task { await search() } }
+                    .focused($searchFieldFocused)
+                    .onSubmit { Task { await runSearch() } }
+                    .onChange(of: query) { _, _ in errorMessage = nil }
 
                 Button {
-                    Task { await search() }
+                    Task { await runSearch() }
                 } label: {
-                    if isSearching {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "magnifyingglass")
+                    HStack(spacing: 6) {
+                        if isSearching { ProgressView() }
+                        Text(isSearching ? "Searching" : "Search")
                     }
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(isSearching || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("Search videos")
             }
@@ -40,11 +44,17 @@ struct YouTubeSearchView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if !isSearching && results.isEmpty && errorMessage == nil {
+            if !hasSearched && !isSearching {
                 ContentUnavailableView(
                     "Search for a video",
                     systemImage: "magnifyingglass",
-                    description: Text("Enter a title or keywords, then tap Search.")
+                    description: Text("Enter a video title or keywords, then tap Search or press Search on the keyboard.")
+                )
+            } else if hasSearched && results.isEmpty && errorMessage == nil && !isSearching {
+                ContentUnavailableView(
+                    "No videos found",
+                    systemImage: "video.slash",
+                    description: Text("Try different keywords.")
                 )
             }
 
@@ -70,10 +80,13 @@ struct YouTubeSearchView: View {
     }
 
     @MainActor
-    private func search() async {
+    private func runSearch() async {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty, !isSearching else { return }
+
+        searchFieldFocused = false
         isSearching = true
+        hasSearched = true
         errorMessage = nil
         results = []
         defer { isSearching = false }
@@ -85,7 +98,7 @@ struct YouTubeSearchView: View {
                 errorMessage = "No videos found. Try different keywords."
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Search failed: \(error.localizedDescription)"
         }
     }
 }
