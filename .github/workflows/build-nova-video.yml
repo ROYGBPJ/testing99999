@@ -28,8 +28,13 @@ jobs:
           test -d "$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry NovaVideo-unsigned.ipa Payload
-          unzip -t NovaVideo-unsigned.ipa
+          echo "Checking app bundle contents..."
+          ls -la Payload
+          echo "Creating IPA archive..."
+          /usr/bin/zip -r NovaVideo-unsigned.ipa Payload
+          echo "Checking IPA archive..."
+          /usr/bin/unzip -t NovaVideo-unsigned.ipa
+          echo "IPA packaging and validation completed."
       - uses: actions/upload-artifact@v4
         with:
           name: NovaVideo-unsigned-ipa
