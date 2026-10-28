@@ -8,7 +8,7 @@ struct NovaVideoApp: App {
 }
 
 struct VideoResult: Identifiable, Decodable {
-    struct ID: Decodable { let videoId: String? }
+    struct APIID: Decodable { let videoId: String? }
     struct Snippet: Decodable {
         let title: String
         let channelTitle: String
@@ -19,7 +19,7 @@ struct VideoResult: Identifiable, Decodable {
         let medium: ImageInfo?
         let high: ImageInfo?
     }
-    let apiID: ID
+    let apiID: APIID
     let snippet: Snippet
     var id: String { apiID.videoId ?? snippet.title }
     var watchURL: URL? { apiID.videoId.flatMap { URL(string: "https://www.youtube.com/watch?v=\($0)") } }
