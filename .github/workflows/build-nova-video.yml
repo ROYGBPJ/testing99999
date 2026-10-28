@@ -21,7 +21,7 @@ jobs:
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: |
-          xcodebuild -project NovaVideo.xcodeproj -scheme NovaVideo -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO
+          xcodebuild -project NovaVideo.xcodeproj -scheme NovaVideo -sdk iphoneos -configuration Release -derivedDataPath build YOUTUBE_API_KEY="${YOUTUBE_API_KEY}" CODE_SIGNING_ALLOWED=NO
       - name: Package IPA
         run: |
           APP="build/Build/Products/Release-iphoneos/NovaVideo.app"
