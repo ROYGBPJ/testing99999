@@ -57,8 +57,15 @@ struct SearchView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if results.isEmpty && !busy && error == nil {
-                    ContentUnavailableView("Search videos", systemImage: "play.rectangle",
-                        description: Text("Enter a title and tap Search or press Search on the keyboard."))
+                    VStack(spacing: 8) {
+                        Image(systemName: "play.rectangle").font(.largeTitle)
+                        Text("Search videos").font(.headline)
+                        Text("Enter a title and tap Search or press Search on the keyboard.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
                 }
                 List(results) { item in
                     VStack(alignment: .leading, spacing: 5) {
