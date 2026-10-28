@@ -1,0 +1,37 @@
+name: Extract Payload ZIP
+
+on:
+  push:
+    paths:
+      - "Payload.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract-payload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Extract Payload.zip
+        run: |
+          test -f Payload.zip
+          unzip -o Payload.zip -d .
+          test -d Payload
+
+      - name: Commit extracted Payload folder
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Payload
+          if git diff --cached --quiet; then
+            echo "No extracted Payload changes to commit."
+          else
+            git commit -m "Extract Payload.zip into Payload folder"
+            git push
+          fi
