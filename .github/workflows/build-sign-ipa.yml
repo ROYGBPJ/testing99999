@@ -83,13 +83,36 @@ jobs:
           codesign --force --deep --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" --timestamp=none Payload/Y.app
           codesign --verify --deep --strict --verbose=2 Payload/Y.app
 
+      - name: Validate app bundle before packaging
+        run: |
+          set -euo pipefail
+          APP="Payload/Y.app"
+          plutil -lint "$APP/Info.plist"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          test -n "$EXECUTABLE"
+          test -f "$APP/$EXECUTABLE"
+          test -s "$APP/$EXECUTABLE"
+          echo "Validated app executable: $EXECUTABLE ($(stat -f%z "$APP/$EXECUTABLE") bytes)"
+
       - name: Package IPA
         run: |
           set -euo pipefail
           mkdir -p build
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload build/Nova_Video_v15.ipa
           unzip -t build/Nova_Video_v15.ipa
-          test "$(unzip -Z1 build/Nova_Video_v15.ipa | grep -c '^Payload/Y.app/Info.plist$')" -eq 1
+          test "$(unzip -Z1 build/Nova_Video_v15.ipa | grep -c '^Payload/Y.app/Info.plist
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nova-Video-v15-IPA
+          path: build/Nova_Video_v15.ipa
+          if-no-files-found: error
+          retention-days: 7
+)" -eq 1
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' Payload/Y.app/Info.plist)
+          test "$(unzip -Z1 build/Nova_Video_v15.ipa | grep -Fxc "Payload/Y.app/$EXECUTABLE")" -eq 1
+          unzip -p build/Nova_Video_v15.ipa "Payload/Y.app/$EXECUTABLE" > "$RUNNER_TEMP/ipa-executable-check"
+          test -s "$RUNNER_TEMP/ipa-executable-check"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
