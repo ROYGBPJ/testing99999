@@ -15,6 +15,7 @@ These files are recovery scaffolding, not recovered original source. The reposit
 ## Included source examples
 
 - `DownloadEntryView.swift`: SwiftUI input/button scaffold; Return key and keyboard changes do not initiate downloads. The supplied callback must be connected to a real resolver/downloader, and errors should be displayed by the host view.
+- `YouTubeSearchView.swift`: SwiftUI search field and results list scaffold. It displays API errors and links results to their YouTube watch pages. It requires a configured `YouTubeSearchService` and a valid API key.
 - `YouTubeSearchService.swift`: YouTube Data API v3 search by title/keywords. Configure an API key securely; do not commit a real key. API quota limits apply.
 - `SafeDownloadManager.swift`: direct-media download validation for HTTP status, MIME type, nonzero file size, and safe temporary-file promotion.
 
