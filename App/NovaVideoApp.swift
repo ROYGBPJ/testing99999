@@ -19,17 +19,12 @@ struct VideoResult: Identifiable, Decodable {
         let medium: ImageInfo?
         let high: ImageInfo?
     }
-    let id: ID
+    let apiID: ID
     let snippet: Snippet
-    var ident: String { id.videoId ?? UUID().uuidString }
-    var watchURL: URL? { id.videoId.flatMap { URL(string: "https://www.youtube.com/watch?v=\($0)") } }
-    enum CodingKeys: String, CodingKey { case id, snippet }
+    var id: String { apiID.videoId ?? snippet.title }
+    var watchURL: URL? { apiID.videoId.flatMap { URL(string: "https://www.youtube.com/watch?v=\($0)") } }
+    enum CodingKeys: String, CodingKey { case apiID = "id", snippet }
 }
-extension VideoResult: Hashable {
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.ident == rhs.ident }
-    func hash(into hasher: inout Hasher) { hasher.combine(ident) }
-}
-extension VideoResult: Identifiable { var identity: String { ident } }
 
 struct SearchResponse: Decodable { let items: [VideoResult] }
 
