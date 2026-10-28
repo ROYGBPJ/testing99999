@@ -29,3 +29,15 @@ These files are recovery scaffolding, not recovered original source. The reposit
 ## Required next step
 
 To make these changes affect the app, the original Xcode project/source must be recovered or the app must be rebuilt from source in a real Xcode target. Add these files to that target, implement the actual media resolver and playback/container validation, remove any plan UI and purchase-gating code, then build and test on an iPhone. The current packaging-only workflow cannot compile or integrate these changes.
+
+## Current screenshot issues to fix
+
+The user reports that the in-app Find/Search button does not return a list when searching by video title, and provided a screenshot of a Restore screen that displays a crown, premium claims, and an indefinite spinner.
+
+Required behavior in the rebuilt app:
+- Remove the Restore/premium screen entirely, including the crown offer, premium-feature pitch, restore-purchases action, subscription/paywall prompts, and any spinner associated with loading purchase status.
+- The close/back action must return to the normal app screen without requiring a purchase or restore operation.
+- Search by title/keywords must call the configured search service when the user taps Find/Search, display returned video titles in a visible results list, and display actionable errors if the API key is missing/invalid, quota is exhausted, or the network request fails.
+- Do not leave the UI in a permanent loading state; always stop loading after success or failure.
+- Search result display is distinct from downloading: opening a result should open its YouTube watch page; downloading requires a supported, valid media resolver.
+- The current repository still lacks the original Xcode project and the packaging workflow does not compile the recovery Swift files. These requirements will not affect the installed IPA until the app is rebuilt from integrated source.
