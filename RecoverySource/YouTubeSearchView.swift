@@ -12,10 +12,23 @@ struct YouTubeSearchView: View {
     @State private var errorMessage: String?
     @FocusState private var searchFieldFocused: Bool
 
+    private var trimmedQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var youtubeSearchURL: URL? {
+        guard !trimmedQuery.isEmpty,
+              var components = URLComponents(string: "https://www.youtube.com/results") else {
+            return nil
+        }
+        components.queryItems = [URLQueryItem(name: "search_query", value: trimmedQuery)]
+        return components.url
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
-                TextField("Search video name", text: $query)
+                TextField("Search video title", text: $query)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.webSearch)
@@ -29,12 +42,20 @@ struct YouTubeSearchView: View {
                 } label: {
                     HStack(spacing: 6) {
                         if isSearching { ProgressView() }
-                        Text(isSearching ? "Searching" : "Search")
+                        Text(isSearching ? "Searching…" : "Search")
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isSearching || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel("Search videos")
+                .disabled(isSearching || trimmedQuery.isEmpty)
+                .accessibilityLabel("Search video titles")
+            }
+
+            if let youtubeSearchURL {
+                Link(destination: youtubeSearchURL) {
+                    Label("Search on YouTube instead", systemImage: "play.rectangle")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .font(.subheadline)
             }
 
             if let errorMessage {
@@ -46,28 +67,45 @@ struct YouTubeSearchView: View {
 
             if !hasSearched && !isSearching {
                 ContentUnavailableView(
-                    "Search for a video",
+                    "Find a YouTube video",
                     systemImage: "magnifyingglass",
-                    description: Text("Enter a video title or keywords, then tap Search or press Search on the keyboard.")
+                    description: Text("Enter a video title or keywords. Search lists matching videos here when the API is configured.")
                 )
             } else if hasSearched && results.isEmpty && errorMessage == nil && !isSearching {
                 ContentUnavailableView(
                     "No videos found",
                     systemImage: "video.slash",
-                    description: Text("Try different keywords.")
+                    description: Text("Try different keywords or use Search on YouTube instead.")
                 )
             }
 
             List(results) { result in
                 if let url = result.watchURL {
                     Link(destination: url) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(result.snippet.title)
-                                .font(.headline)
-                                .lineLimit(2)
-                            Text(result.snippet.channelTitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        HStack(spacing: 12) {
+                            if let thumbnailURL = result.thumbnailURL {
+                                AsyncImage(url: thumbnailURL) { image in
+                                    image.resizable().scaledToFill()
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(.quaternary)
+                                        .overlay {
+                                            Image(systemName: "play.rectangle")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                }
+                                .frame(width: 112, height: 63)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(result.snippet.title)
+                                    .font(.headline)
+                                    .lineLimit(2)
+                                Text(result.snippet.channelTitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 } else {
@@ -81,7 +119,7 @@ struct YouTubeSearchView: View {
 
     @MainActor
     private func runSearch() async {
-        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let term = trimmedQuery
         guard !term.isEmpty, !isSearching else { return }
 
         searchFieldFocused = false
@@ -92,13 +130,12 @@ struct YouTubeSearchView: View {
         defer { isSearching = false }
 
         do {
-            let found = try await service.searchVideos(query: term)
-            results = found
-            if found.isEmpty {
-                errorMessage = "No videos found. Try different keywords."
+            results = try await service.searchVideos(query: term)
+            if results.isEmpty {
+                errorMessage = "No matching videos returned. Try different keywords or search on YouTube."
             }
         } catch {
-            errorMessage = "Search failed: \(error.localizedDescription)"
+            errorMessage = "\(error.localizedDescription) You can still use Search on YouTube instead."
         }
     }
 }
