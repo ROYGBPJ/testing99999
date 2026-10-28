@@ -1,7 +1,7 @@
 import Foundation
 
 struct YouTubeSearchResult: Decodable, Identifiable {
-    struct VideoID: Decodable { let videoId: String? }
+    struct VideoID: Decodable, Hashable { let videoId: String? }
     struct Snippet: Decodable {
         let title: String
         let channelTitle: String
