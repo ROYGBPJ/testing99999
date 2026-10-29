@@ -28,14 +28,14 @@ This suggests the app was written to tolerate multiple historical API response s
 
 ## Authentication status
 
-The request's headers are loaded from a compiled static dictionary (three key/value pairs are constructed before `setAllHTTPHeaderFields:`). Static disassembly alone has not established whether the embedded credentials are still valid, whether the account still has quota, or whether the service has changed its required headers. Do not print, commit, or share any embedded API secret. If a key is found to be exposed in the binary, treat it as public and rotate it through the provider.
+The request's headers are loaded from a compiled static dictionary (three key/value pairs are constructed before `setAllHTTPHeaderFields:`). The binary contains the header name `x-rapidapi-key`, so the request appears designed to use RapidAPI key authentication. I have not reproduced or published the credential value. Static analysis cannot establish whether that value is still valid, whether the account still has quota, or whether the service has changed its required headers. Do not print, commit, or share any embedded API secret. If a key is found to be exposed in the binary, treat it as public and rotate it through the provider.
 
 ## Most likely failure points, in test order
 
 1. **API authorization / quota / endpoint availability:** an HTTP 403 or 429 has an explicit app branch. The bundled key may be expired, revoked, quota-limited, or otherwise rejected; this requires a real response status to distinguish.
 2. **API response schema drift:** the app supports several old JSON layouts, but a new response can miss every recognized path. The app's own logs should then include “All parsers failed” and the raw response.
 3. **Resolver output is not a usable media URL:** a parser can extract a URL that later fails validation or download. The app logs the final URL and later download errors.
-4. **The title-search feature is separate:** the inspected resolver accepts a URL string and sends it to the RapidAPI endpoint. That code does not itself implement YouTube title/keyword search. A button named Find may route into a different function; its exact call path must be traced before assuming this endpoint powers search.
+4. **Title search is not implemented by the inspected resolver:** the resolver accepts a URL string and sends it as the `url` query parameter to the RapidAPI endpoint. It is a URL-to-media resolver, not a YouTube title/keyword search API. The binary has a `btnFind` action, but the resolver implementation alone cannot produce a list of videos from search keywords. The title-search button's complete call path remains unproven, so the strongest current conclusion is that the resolver cannot, by itself, satisfy title-search behavior.
 
 ## Repair boundary
 
