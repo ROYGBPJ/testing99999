@@ -1,4 +1,4 @@
-name: Build and Sign iOS IPA
+name: Build and Sign Nova Video v20 IPA
 
 on:
   workflow_dispatch:
@@ -6,47 +6,37 @@ on:
     paths:
       - "Payload/**"
       - ".github/workflows/build-sign-ipa.yml"
+      - "SIGNING-SETUP.md"
 
 permissions:
   contents: read
 
 jobs:
-  build-ipa:
+  build-sign-ipa:
     runs-on: macos-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Verify app bundle
+      - name: Verify original app bundle and set v20 version metadata
         shell: bash
         run: |
           set -euo pipefail
-          test -d Payload/Y.app
-          test -f Payload/Y.app/Info.plist
-          plutil -lint Payload/Y.app/Info.plist
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' Payload/Y.app/Info.plist
-          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' Payload/Y.app/Info.plist)
-          test -n "$EXECUTABLE"
-          test -s "Payload/Y.app/$EXECUTABLE"
-          echo "Validated executable: $EXECUTABLE"
+          APP="Payload/Y.app"
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          plutil -lint "$APP/Info.plist"
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          test -n "$BUNDLE_ID"
+          test -s "$APP/$EXECUTABLE"
+          echo "Bundle identifier: $BUNDLE_ID"
+          echo "Executable: $EXECUTABLE"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 20.0' "$APP/Info.plist" || /usr/libexec/PlistBuddy -c 'Add :CFBundleShortVersionString string 20.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 20' "$APP/Info.plist" || /usr/libexec/PlistBuddy -c 'Add :CFBundleVersion string 20' "$APP/Info.plist"
+          plutil -lint "$APP/Info.plist"
 
-      - name: Prepare signing inputs
-        id: signing
-        env:
-          IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
-          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
-          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
-        shell: bash
-        run: |
-          if [[ -n "$IOS_P12_BASE64" && -n "$IOS_P12_PASSWORD" && -n "$IOS_PROVISION_PROFILE_BASE64" ]]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Signing secrets are not all configured; an unsigned IPA will be produced."
-          fi
-
-      - name: Sign app with Apple Development certificate
-        if: steps.signing.outputs.enabled == 'true'
+      - name: Require all Apple signing inputs
         env:
           IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
           IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
@@ -54,7 +44,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          [[ -n "$IOS_P12_BASE64" ]] || { echo "::error::Missing IOS_P12_BASE64 repository secret."; exit 1; }
+          [[ -n "$IOS_P12_PASSWORD" ]] || { echo "::error::Missing IOS_P12_PASSWORD repository secret."; exit 1; }
+          [[ -n "$IOS_PROVISION_PROFILE_BASE64" ]] || { echo "::error::Missing IOS_PROVISION_PROFILE_BASE64 repository secret."; exit 1; }
+
+      - name: Import Apple signing certificate and profile
+        env:
+          IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/nova-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
           PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
@@ -63,63 +65,58 @@ jobs:
 
           printf '%s' "$IOS_P12_BASE64" | base64 --decode > "$CERT_PATH"
           printf '%s' "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          test -s "$CERT_PATH"
+          test -s "$PROFILE_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$CERT_PATH" -k "$KEYCHAIN" -P "$IOS_P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          security list-keychains -d user -s "$KEYCHAIN"
           security default-keychain -d user -s "$KEYCHAIN"
 
           security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
           /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$PROFILE_PLIST" > "$ENTITLEMENTS"
-          cp "$PROFILE_PATH" Payload/Y.app/embedded.mobileprovision
-
-          APP_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' Payload/Y.app/Info.plist)
+          APP="Payload/Y.app"
+          APP_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
           PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")
           PROFILE_BUNDLE_ID="${PROFILE_APP_ID#*.}"
           if [[ "$PROFILE_BUNDLE_ID" != "$APP_BUNDLE_ID" && "$PROFILE_BUNDLE_ID" != "*" ]]; then
-            echo "Provisioning profile bundle ID ($PROFILE_BUNDLE_ID) does not match app ($APP_BUNDLE_ID)." >&2
+            echo "::error::Provisioning profile bundle ID ($PROFILE_BUNDLE_ID) does not match app ($APP_BUNDLE_ID)."
             exit 1
           fi
+          cp "$PROFILE_PATH" "$APP/embedded.mobileprovision"
 
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F '"' '/Apple Development:/ {print $2; exit}')
-          if [[ -z "$IDENTITY" ]]; then
-            echo "No Apple Development signing identity was found in the supplied .p12." >&2
-            exit 1
-          fi
+          [[ -n "$IDENTITY" ]] || { echo "::error::No valid Apple Development identity found in the .p12."; exit 1; }
+          echo "Signing identity found. Private signing data will not be uploaded as an artifact."
 
-          codesign --force --deep --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" --timestamp=none Payload/Y.app
-          codesign --verify --deep --strict --verbose=2 Payload/Y.app
+          codesign --force --deep --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          spctl --assess --type execute --verbose=2 "$APP" || true
 
-      - name: Validate app bundle before packaging
+      - name: Package and validate signed v20 IPA
         shell: bash
         run: |
           set -euo pipefail
-          plutil -lint Payload/Y.app/Info.plist
-          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' Payload/Y.app/Info.plist)
-          test -s "Payload/Y.app/$EXECUTABLE"
-          echo "App executable size: $(stat -f%z "Payload/Y.app/$EXECUTABLE") bytes"
-
-      - name: Package and validate IPA
-        shell: bash
-        run: |
-          set -euo pipefail
+          APP="Payload/Y.app"
           mkdir -p build
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload build/Nova_Video_v15.ipa
-          unzip -t build/Nova_Video_v15.ipa
-          unzip -Z1 build/Nova_Video_v15.ipa | grep -Fx 'Payload/Y.app/Info.plist'
-          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' Payload/Y.app/Info.plist)
-          unzip -Z1 build/Nova_Video_v15.ipa | grep -Fx "Payload/Y.app/$EXECUTABLE"
-          unzip -p build/Nova_Video_v15.ipa "Payload/Y.app/$EXECUTABLE" > "$RUNNER_TEMP/ipa-executable-check"
-          test -s "$RUNNER_TEMP/ipa-executable-check"
-          echo "IPA packaging and executable checks passed."
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload build/Nova-Video-v20.ipa
+          unzip -t build/Nova-Video-v20.ipa
+          unzip -Z1 build/Nova-Video-v20.ipa | grep -Fx 'Payload/Y.app/Info.plist'
+          unzip -Z1 build/Nova-Video-v20.ipa | grep -Fx 'Payload/Y.app/embedded.mobileprovision'
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          unzip -Z1 build/Nova-Video-v20.ipa | grep -Fx "Payload/Y.app/$EXECUTABLE"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          [[ "$VERSION" == "20.0" ]]
+          echo "Signed IPA validation passed; metadata version: $VERSION"
 
-      - name: Upload IPA artifact
+      - name: Upload signed IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Nova-Video-v15-IPA
-          path: build/Nova_Video_v15.ipa
+          name: Nova-Video-v20-SIGNED-IPA
+          path: build/Nova-Video-v20.ipa
           if-no-files-found: error
           retention-days: 7
