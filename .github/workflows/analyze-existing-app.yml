@@ -1,0 +1,89 @@
+name: Analyze and Decompile Existing iOS App
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-existing-binary:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify and identify original app
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d Payload/Y.app
+          APP="Payload/Y.app"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          BIN="$APP/$EXECUTABLE"
+          test -s "$BIN"
+          mkdir -p analysis-report
+          {
+            echo "=== APP METADATA ==="
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" || true
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" || true
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" || true
+            echo
+            echo "=== FILE HASHES ==="
+            shasum -a 256 "$BIN"
+            echo
+            echo "=== FILE TYPE ==="
+            file "$BIN"
+            echo
+            echo "=== LINKED LIBRARIES ==="
+            otool -L "$BIN" || true
+            echo
+            echo "=== BINARY LOAD COMMANDS / PLATFORM ==="
+            otool -l "$BIN" | grep -E -A5 'LC_BUILD_VERSION|LC_VERSION_MIN_IPHONEOS|LC_ENCRYPTION_INFO|LC_ENCRYPTION_INFO_64|LC_UUID' || true
+          } > analysis-report/binary-overview.txt 2>&1
+
+      - name: Extract strings and symbol information
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="Payload/Y.app"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          BIN="$APP/$EXECUTABLE"
+          strings -a -n 4 "$BIN" > analysis-report/executable-strings.txt
+          nm -m "$BIN" > analysis-report/symbols.txt 2>&1 || true
+          xcrun swift-demangle < analysis-report/symbols.txt > analysis-report/demangled-symbols.txt 2>&1 || true
+          otool -ov "$BIN" > analysis-report/objective-c-metadata.txt 2>&1 || true
+          find "$APP" -maxdepth 4 -type f -print | sort > analysis-report/app-file-inventory.txt
+          {
+            echo "=== SEARCH / VIDEO / PURCHASE / NETWORK STRING MATCHES ==="
+            grep -Ein -i 'youtube|search|video|download|premium|purchase|restore|subscription|paywall|webview|wkwebview|http|api|media|stream|find' analysis-report/executable-strings.txt | head -n 3000 || true
+            echo
+            echo "=== FRAMEWORK / APP SYMBOL MATCHES ==="
+            grep -Ein -i 'youtube|search|video|download|premium|purchase|restore|subscription|webview|URLSession|AVPlayer|WKWebView|SwiftUI|UIKit' analysis-report/demangled-symbols.txt | head -n 3000 || true
+          } > analysis-report/relevant-findings.txt
+
+      - name: Check encryption indicators
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="Payload/Y.app"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          BIN="$APP/$EXECUTABLE"
+          {
+            echo "This is static analysis of the supplied compiled app, not recovered original source."
+            echo "If the executable is encrypted or symbols are stripped, readable code recovery may be limited."
+            echo
+            otool -l "$BIN" | grep -E -A8 'LC_ENCRYPTION_INFO(_64)?' || true
+            echo
+            echo "Mach-O architectures:"
+            lipo -info "$BIN" || true
+          } > analysis-report/encryption-and-architecture.txt
+
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Video-Saver-Binary-Analysis
+          path: analysis-report/
+          if-no-files-found: error
+          retention-days: 14
