@@ -41,3 +41,8 @@ Required behavior in the rebuilt app:
 - Do not leave the UI in a permanent loading state; always stop loading after success or failure.
 - Search result display is distinct from downloading: opening a result should open its YouTube watch page; downloading requires a supported, valid media resolver.
 - The current repository still lacks the original Xcode project and the packaging workflow does not compile the recovery Swift files. These requirements will not affect the installed IPA until the app is rebuilt from integrated source.
+
+
+## Original compiled binary investigation
+
+See [`OriginalBinary-YouTube-Investigation.md`](OriginalBinary-YouTube-Investigation.md) for the traced RapidAPI request, response-parser compatibility clues, status-code handling, and a safe validation plan. This is static analysis only; the original binary has not been modified, and the live service response/authentication state remains unverified.
