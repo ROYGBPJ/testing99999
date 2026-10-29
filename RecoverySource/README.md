@@ -46,3 +46,8 @@ Required behavior in the rebuilt app:
 ## Original compiled binary investigation
 
 See [`OriginalBinary-YouTube-Investigation.md`](OriginalBinary-YouTube-Investigation.md) for the traced RapidAPI request, response-parser compatibility clues, status-code handling, and a safe validation plan. This is static analysis only; the original binary has not been modified, and the live service response/authentication state remains unverified.
+
+
+## Isolated search-service test target
+
+A Swift Package test target now lives under `RecoverySource/` and is run by `.github/workflows/recovery-search-tests.yml`. It checks input validation, missing-key handling, JSON decoding, and watch-URL construction without needing a real API key. This is a testable source-level component, not an integration into `Payload/Y.app`; the existing IPA is unchanged. A real title search still requires a valid YouTube Data API v3 key and the recovery UI must be integrated into a real Xcode app target before it can be shipped.
