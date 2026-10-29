@@ -1,0 +1,48 @@
+name: Focused Binary Disassembly
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/focused-disassembly.yml"
+permissions:
+  contents: read
+jobs:
+  disassemble:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Disassemble original app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="Payload/Y.app"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          BIN="$APP/$EXECUTABLE"
+          test -s "$BIN"
+          mkdir -p disassembly-report
+          echo "=== APP METADATA ===" > disassembly-report/summary.txt
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" >> disassembly-report/summary.txt
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" >> disassembly-report/summary.txt || true
+          echo "=== ENCRYPTION ===" >> disassembly-report/summary.txt
+          otool -l "$BIN" | grep -A8 'LC_ENCRYPTION_INFO' >> disassembly-report/summary.txt || true
+          echo "=== SYMBOLS ===" > disassembly-report/target-symbols.txt
+          nm -m "$BIN" 2>&1 | grep -Ei 'btnFind|YouTubeResponse|YouTubeLink|search|URLSession|PremiumVC' >> disassembly-report/target-symbols.txt || true
+          echo "=== YOUTUBE / SEARCH STRINGS ===" > disassembly-report/search-strings.txt
+          strings -a -n 4 "$BIN" | grep -Ei 'youtube|youtu.be|googleapis|youtubei|search_query|videoId|video_id|nextPageToken|api.?key|hosting|quality|links|search|download' >> disassembly-report/search-strings.txt || true
+          otool -tvV "$BIN" > disassembly-report/disassembly.txt 2>&1 || true
+          grep -Ein -A40 -B3 'btnFind|YouTubeResponse|YouTubeLink|URLSession' disassembly-report/disassembly.txt > disassembly-report/targeted-disassembly.txt || true
+          echo "=== SUMMARY ==="
+          cat disassembly-report/summary.txt
+          echo "=== TARGET SYMBOLS ==="
+          cat disassembly-report/target-symbols.txt
+          echo "=== SEARCH STRINGS ==="
+          cat disassembly-report/search-strings.txt
+          echo "=== TARGETED DISASSEMBLY ==="
+          head -n 600 disassembly-report/targeted-disassembly.txt
+      - name: Upload disassembly report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Focused-Binary-Disassembly
+          path: disassembly-report/
+          retention-days: 14
