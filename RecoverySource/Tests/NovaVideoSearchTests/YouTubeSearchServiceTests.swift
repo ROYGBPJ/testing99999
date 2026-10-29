@@ -27,13 +27,19 @@ final class YouTubeSearchServiceTests: XCTestCase {
         }
     }
 
-    func testWatchURLEncodesVideoID() throws {
+    func testWatchURLContainsEncodedVideoID() throws {
         let data = Data(#"{"items":[{"id":{"videoId":"abc_123-xy"},"snippet":{"title":"Test & title","channelTitle":"Channel","description":"Description","thumbnails":{"high":{"url":"https://i.ytimg.com/vi/abc_123-xy/hqdefault.jpg"}}}}]}"#.utf8)
         let response = try JSONDecoder().decode(TestEnvelope.self, from: data)
-        let result = response.items[0]
+        let result = try XCTUnwrap(response.items.first)
         XCTAssertEqual(result.videoID, "abc_123-xy")
         XCTAssertEqual(URLComponents(url: try XCTUnwrap(result.watchURL), resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "v" })?.value, "abc_123-xy")
         XCTAssertEqual(result.snippet.title, "Test & title")
+        XCTAssertEqual(result.thumbnailURL?.host, "i.ytimg.com")
+    }
+
+    func testSearchResponseDecodesEmptyItems() throws {
+        let response = try JSONDecoder().decode(TestEnvelope.self, from: Data(#"{"items":[]}"#.utf8))
+        XCTAssertTrue(response.items.isEmpty)
     }
 
     private struct TestEnvelope: Decodable { let items: [YouTubeSearchResult] }
