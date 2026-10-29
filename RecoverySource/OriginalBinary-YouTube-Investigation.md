@@ -48,3 +48,10 @@ The repository's current workflow packages the precompiled `Payload/Y.app`; it d
 - If authorization/quota is the failure, configure a valid key through a backend/proxy you control rather than embedding a reusable secret in the IPA.
 - If the response schema is the failure, update a source-level parser with a fixture from the current API and tests for the known response layouts.
 - Keep the original IPA unchanged; create and device-test any candidate build separately.
+
+
+## Follow-up: Find-button disassembly
+
+A targeted disassembly of the `btnFind` action at the current binary's mapped addresses shows the action body branching to `adShown()` or `displayAd()`, with no visible call from that action to a YouTube search endpoint or a search-results controller in the inspected function. The related `btnSelVideo` action is routed through the same thunk with a different selector argument. This strengthens the conclusion that the compiled Find action, as currently analyzed, is not wired to a title-search implementation; it does not prove that no search logic exists anywhere else in the binary.
+
+**Practical consequence:** adding the recovered `YouTubeSearchView` to `RecoverySource/` still cannot alter `Payload/Y.app`. The current repository has no original Xcode project/source to recompile, and the packaging workflow only repackages that binary. A working fix requires either recovering the original project/source or building a separate replacement app from the recovery sources. No binary patch or fixed IPA has been produced.
