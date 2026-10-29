@@ -83,6 +83,19 @@ jobs:
             lipo -info "$BIN" || true
           } > analysis-report/encryption-and-architecture.txt
 
+      - name: Print analysis findings to workflow log
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "===== BINARY OVERVIEW ====="
+          cat analysis-report/binary-overview.txt
+          echo "===== ENCRYPTION / ARCHITECTURE ====="
+          cat analysis-report/encryption-and-architecture.txt
+          echo "===== RELEVANT FINDINGS ====="
+          cat analysis-report/relevant-findings.txt
+          echo "===== APP FILE INVENTORY ====="
+          cat analysis-report/app-file-inventory.txt
+
       - name: Upload analysis report
         uses: actions/upload-artifact@v4
         with:
